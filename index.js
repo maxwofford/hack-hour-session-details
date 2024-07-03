@@ -1,4 +1,4 @@
-process.env.AIRTABLE_BASE_ID = "app4kCWulfB02bV8Q"
+const airtableBaseID = "app4kCWulfB02bV8Q"
 
 require('dotenv').config()
 
@@ -11,7 +11,7 @@ Airtable.configure({
   apiKey: process.env.AIRTABLE_API_KEY
 })
 
-const base = Airtable.base(process.env.AIRTABLE_BASE_ID);
+const base = Airtable.base(airtableBaseID);
 // get all records from the base with a filter
 const records = await base('Sessions').select({
   filterByFormula: `AND({${commitFieldName}} = BLANK(), {Status} = 'Unreviewed')`,
