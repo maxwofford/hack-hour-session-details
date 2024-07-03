@@ -1,0 +1,16 @@
+{
+  "name": "hack-hour-session-details",
+  "module": "index.js",
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "airtable": "^0.12.2",
+    "dotenv": "^16.4.5",
+    "slack": "^11.0.2"
+  }
+}
