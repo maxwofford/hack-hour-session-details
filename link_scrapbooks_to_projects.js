@@ -39,11 +39,13 @@ async function findOrCreateProject(name, scrapbookID, userID) {
     .all();
   let projectRecord = projectRecords[0];
   if (projectRecord) {
-    projectRecord.update({
+    console.log("Updating project", name)
+    await projectBase.update(projectRecord.id, {
       "Action: Scrape for project details": true,
       Scrapbooks: unique([...projectRecord.get("Scrapbooks"), scrapbookID]),
     })
   } else {
+    console.log("Creating project", name)
     projectRecord = await projectBase.create({
       "Action: Scrape for project details": true,
       Name: name,
