@@ -79,7 +79,6 @@ const scrapbookFilter = [
 ];
 const scrapbookRecords = await scrapbookBase
   .select({
-    maxRecords: 10,
     filterByFormula: `AND(${scrapbookFilter.join(",")})`,
   })
   .all();
@@ -99,10 +98,8 @@ for (let i = 0; i < scrapbookRecords.length; i++) {
     continue;
   } else if (projects.length === 1) {
     const projectRecord = await findOrCreateProject(projects[0], scrapbook.id, scrapbook.get("User")[0]);
-    await scrapbookBase.update(scrapbook.id, {
-      Projects: [projectRecord.id],
-    });
-    console.log("Created", projectRecord.id);
+  } else {
+    console.log("No projects found for scrapbook", scrapbook.id);
   }
 
   await new Promise((r) => setTimeout(r, 3000));
