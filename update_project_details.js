@@ -16,8 +16,6 @@ const projects = await projectsBase.select({
 
 for (let i = 0; i < projects.length; i++) {
   const project = projects[i];
-  console.log("Updating project", project.id)
-  console.log("playable link", await getPlayableLink(project.fields["Repo"]))
   projectsBase.update(project.id, {
     "Action: Scrape for project details": false,
     "Playable Link": project.get("Playable Link") || await getPlayableLink(project.fields["Repo"]),
