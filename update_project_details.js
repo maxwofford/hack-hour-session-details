@@ -11,7 +11,6 @@ const projectsBase = base("Projects");
 
 const projects = await projectsBase.select({
   filterByFormula: `{Action: Scrape for project details} = TRUE()`,
-  maxRecords: 10,
 }).all();
 
 for (let i = 0; i < projects.length; i++) {
@@ -25,9 +24,21 @@ for (let i = 0; i < projects.length; i++) {
 
 async function getPlayableLink(repoName) {
   let playableLink = "";
+  if (repoName.includes("github.io")) {
+    try {
+      await fetch(`https://${repoName}`).then((r) => {
+        if (r.status === 200) {
+          playableLink = repoName;
+        }
+      })
+    } catch(e) {
+      console.log(e)
+    }
+  }
   const ghData = await fetch(
     `https://api.github.com/repos/${repoName}`
   ).then((r) => r.json());
+  await new Promise((r) => setTimeout(r, 5000)); // rate limit for gh api
   console.log(ghData)
   if (ghData.has_pages) {
     playableLink = `${ghData.owner.login}.github.io/${ghData.name}`;

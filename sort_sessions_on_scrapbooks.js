@@ -24,44 +24,40 @@ console.log("Found", scrapbooks.length, "scrapbooks to update");
 for (let i = 0; i < scrapbooks.length; i += chunkSize) {
   console.log("Processing chunk", i);
   const chunk = scrapbooks.slice(i, i + chunkSize);
-  for (const scrapbook of chunk) {
-    console.log("Processing scrapbook", scrapbook.id)
-    await new Promise((r) => setTimeout(r, 1000));
-    const updateJobs = scrapbooks.map(async (scrapbook) => {
-      const sessions = await sessionBase
-        .select({
-          filterByFormula: `{Scrapbook} = '${scrapbook.fields["Scrapbook TS"]}'`,
-        })
-        .all();
+  const updateJobs = chunk.map(async (scrapbook) => {
+    const sessions = await sessionBase
+      .select({
+        filterByFormula: `{Scrapbook} = '${scrapbook.fields["Scrapbook TS"]}'`,
+      })
+      .all();
 
-      const sortedSessions = sessions.sort((a, b) => {
-        return (
-          new Date(a.fields["Created At"]) - new Date(b.fields["Created At"])
-        );
-      });
-
-      return {
-        id: scrapbook.id,
-        fields: {
-          Sessions: sortedSessions.map((session) => session.id),
-          "OTJ: Sorted scraps": true,
-        },
-      };
+    const sortedSessions = sessions.sort((a, b) => {
+      return (
+        new Date(a.fields["Created At"]) - new Date(b.fields["Created At"])
+      );
     });
 
-    const scrapbooksToUpdate = await Promise.all(updateJobs);
+    return {
+      id: scrapbook.id,
+      fields: {
+        Sessions: sortedSessions.map((session) => session.id),
+        "OTJ: Sorted scraps": true,
+      },
+    };
+  });
 
-    scrapbooksToUpdate.forEach((scrapbook) =>
-      console.log(
-        "Just updated scrapbook",
-        scrapbook.id,
-        "with sorted sessions",
-        scrapbook.fields["Sessions"]
-      )
-    );
-    console.log("dryrun")
-    // const output = await scrapbookBase.update(scrapbooksToUpdate);
-    await new Promise((r) => setTimeout(r, 3000));
+  const scrapbooksToUpdate = await Promise.all(updateJobs);
 
-  }
+  scrapbooksToUpdate.forEach((scrapbook) =>
+    console.log(
+      "Just updated scrapbook",
+      scrapbook.id,
+      "with sorted sessions",
+      scrapbook.fields["Sessions"]
+    )
+  );
+
+  console.log("dryrun");
+  const output = await scrapbookBase.update(scrapbooksToUpdate);
+  await new Promise((r) => setTimeout(r, 3000));
 }
