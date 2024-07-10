@@ -12,7 +12,7 @@ To run:
 
 ```bash
 bun run index.js # this searches slack for each session and finds github repost related to projects
-bun run link_scrapbooks_to_projects.js # this finds or creates a project for each repo found
+bun run link_scrapbooks_to_projects.js # this finds or creates a project for each repo found & creates repos
 bun run update_project_details.js # this uses heuristics to guess details about the project
 ```
 
