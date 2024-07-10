@@ -37,9 +37,51 @@ for (let i = 0; i < projects.length; i++) {
       "Playable Link":
         project.get("Playable Link") ||
         (await getPlayableLink(project.fields["Repo"])),
+      "Screenshot / Video":
+        project.get("Screenshot / Video") || (await getScreenshot(project)),
     }),
     new Promise((r) => setTimeout(r, 200)),
   ]);
+}
+
+async function getScreenshot(projectRecord) {
+  const scrapbooks = await base("Scrapbook")
+    .select({
+      filterByFormula: `{Projects} = '${projectRecord.fields["Name"]}'`,
+    })
+    .all();
+  console.log("Found scrapbooks", scrapbooks);
+
+  const scrapbookFiles = scrapbooks[0].fields["Attachments"].map((obj) => ({
+    url: obj.url,
+    filename: obj.filename,
+  }));
+
+  const videoFiles = scrapbookFiles.filter((file) =>
+    file.filename.includes(".mp4")
+  );
+
+  let thumbnails = []
+  for (const file of videoFiles) {
+
+    const { getVideoDurationInSeconds } = require('get-video-duration')
+    const seekTime = Math.min(await getVideoDurationInSeconds(file.url), 60) / 2
+
+    const genThumbnail = require('simple-thumbnail')
+
+    const thumbnail = await genThumbnail(file.url, './tmp/thumb.png', '500x?', {seek: `00:00:${seekTime.toString().padStart(2, '0')}`})
+
+    const imgbbUploader = require("imgbb-uploader");
+    const thumbUrl = await imgbbUploader(process.env.IMGBB_API_KEY, "./tmp/thumb.png")
+      .then((response) => response.url)
+      .catch((error) => console.error(error));
+
+    thumbnails.push({
+      filename: file.filename + ".png",
+      url: thumbUrl,
+    })
+  };
+  return [...thumbnails, ...scrapbookFiles]
 }
 
 async function getPlayableLink(repoName) {
@@ -61,6 +103,7 @@ async function getPlayableLink(repoName) {
     githubHeaders
   ).then((r) => r.json());
   await new Promise((r) => setTimeout(r, ghTimeout)); // rate limit for gh api
+  console.log({ ghData });
   if (ghData.homepage && !playableLink) {
     console.log("Homepage found!", ghData.homepage);
     playableLink = ghData.homepage;

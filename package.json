@@ -11,6 +11,9 @@
   "dependencies": {
     "airtable": "^0.12.2",
     "dotenv": "^16.4.5",
+    "get-video-duration": "^4.1.0",
+    "imgbb-uploader": "^1.5.1",
+    "simple-thumbnail": "^1.6.5",
     "slack": "^11.0.2"
   }
 }
