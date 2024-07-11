@@ -9,6 +9,7 @@
     "typescript": "^5.0.0"
   },
   "dependencies": {
+    "@slack/web-api": "^7.3.1",
     "airtable": "^0.12.2",
     "dotenv": "^16.4.5",
     "get-video-duration": "^4.1.0",

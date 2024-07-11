@@ -3,6 +3,7 @@ const airtableBaseID = "app4kCWulfB02bV8Q"
 require('dotenv').config()
 
 const commitFieldName = "TEMP: Git commits"
+const linkFieldName = "TEMP: All links"
 const slackChannel = "C06SBHMQU8G"
 
 const Airtable = require('airtable');
@@ -15,39 +16,109 @@ const base = Airtable.base(airtableBaseID);
 // get all records from the base with a filter
 const records = await base('Sessions').select({
   filterByFormula: `AND({${commitFieldName}} = BLANK(), {Status} = 'Unreviewed')`,
+  maxRecords: 1000 // prevent the script from choking on too many records
 }).all();
 
 console.log("Found", records.length, "record(s)")
 
-const commitRegex = new RegExp('https://github\.com(?:/[^/]+)*/commit/[0-9a-f]{40}')
+function findUrlsInText(text, regex) {
+  const matches = text.match(regex);
+  return matches || [];
+}
 
-for (const record of records) {
-  const { id, fields } = record
-  const messageTS = fields['Message TS']
-  const slackMessages = (await getSlackReplies(messageTS) || [])
-  let commits = []
-  let newMessage = ""
-  console.log("Checking", slackMessages.length, "messages")
-  slackMessages.forEach(msg => {
-    const txt = msg.text
-    if (!txt) return
-    const matches = txt.match(commitRegex)
-    if (matches) {
-      commits = commits.concat(matches)
-    }
-  })
-  if (commits.length === 0) {
-    console.log("No commits found")
-    newMessage = "None"
-  } else {
-    newMessage = commits.map(c => '- ' + c).join('\n')
+function findGhLinksInText(text) {
+  const commitRegex = new RegExp(
+    "https://github.com(?:/[^/]+)*/commit/[0-9a-f]{40}",
+    "g"
+  );
+  const repoRegex = new RegExp("https://github.com/([^/]+)/([^/]+)", "g");
+  const prRegex = new RegExp("https://github.com(?:/[^/]+)*/pull/[0-9]+", "g");
+  const generalGhRegex = new RegExp("https://github.com(?:/[^/]+)*/[^/]+", "g");
+  const releventLinks = [
+    ...findUrlsInText(text, commitRegex),
+    ...findUrlsInText(text, prRegex),
+    ...findUrlsInText(text, repoRegex),
+    ...findUrlsInText(text, generalGhRegex),
+  ];
+
+  return unique(releventLinks.filter(Boolean));
+}
+
+function findAllLinksInText(text) {
+  // handling slack links means finding links inside of slack formatting, like <https://google.com|google> or <https://google.com>
+  const linkRegex = new RegExp(
+    "https?://[^\\s]+",
+    "g"
+  );
+  const slackLinkRegex = new RegExp(
+    "<https?://[^\\s]+\\|[^\\s]+>",
+    "g"
+  );
+  const foundLinks = [
+    ...findUrlsInText(text, linkRegex),
+    ...findUrlsInText(text, slackLinkRegex),
+  ]
+  console.log(text)
+  console.log(foundLinks)
+  return unique(foundLinks.filter(Boolean));
+}
+
+function unique(arr) {
+  return [...new Set(arr)];
+}
+
+for (let i = 0; i < records.length; i += 10) {
+  const recordsSlice = records.slice(i, i + 10)
+  console.log(`Working on chunk ${i} to ${i + 10} of ${records.length}`)
+  await processRecords(recordsSlice)
+}
+
+async function processRecords(records) {
+  let recordsToUpdate = []
+  for (const record of records) {
+    const { id, fields } = record
+    const messageTS = fields['Message TS']
+    const slackMessages = (await getSlackReplies(messageTS) || [])
+    let ghLinks = []
+    let allLinks = []
+    console.log("\tChecking", slackMessages.length, "messages")
+    slackMessages.forEach(msg => {
+      const txt = msg.text
+      if (!txt) return
+      const ghMatches = findGhLinksInText(txt)
+      const allMatches = findAllLinksInText(txt)
+      console.log(
+        "Running"
+      )
+      if (ghMatches) {
+        ghLinks = ghLinks.concat(ghMatches)
+      }
+      if (allMatches) {
+        allLinks = allLinks.concat(allMatches)
+      }
+    })
+    const ghLinksText = ghLinks.map(c => '- ' + c).join('\n') || "None"
+    const allLinksText = allLinks.map(c => '- ' + c).join('\n') || "None"
+
+    recordsToUpdate.push({
+      id: record.id,
+      fields: {
+        [commitFieldName]: ghLinksText,
+        [linkFieldName]: allLinksText,
+      },
+    })
+    
+    console.log("\tFound", ghLinks.length, "gh links & ", allLinks.length, "all links for record", id)
   }
-
-  await base('Sessions').update(id, {
-    [commitFieldName]: newMessage
-  })
-  console.log("Updated record", id, "with", commits.length, "commits")
-  await sleep(1000)
+  console.log("Saving updates to current batch of records!")
+  try {
+    await base('Sessions').update(recordsToUpdate)
+    await sleep(1000)
+  } catch (e) {
+    if (e.error == 'ratelimited') {
+      sleep(30 * 1000)
+    }
+  }
 }
 
 async function sleep(ms) {
@@ -55,14 +126,14 @@ async function sleep(ms) {
 }
 
 async function getSlackReplies(ts) {
-  const Slack = require('slack');
-  const slack = new Slack({ token: process.env.SLACK_TOKEN });
+  const slack = require('./lib/slack').default
   const replies = await slack.conversations.replies({
     channel: slackChannel,
-    ts: ts
+    ts
   }).catch(err => {
     console.error(err)
     return []
-  });
-  return replies.messages
+  })
+
+  return replies.messages.map(m => m.text)
 }
