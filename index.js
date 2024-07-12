@@ -58,8 +58,6 @@ function findAllLinksInText(text) {
     ...findUrlsInText(text, linkRegex),
     ...findUrlsInText(text, slackLinkRegex),
   ]
-  console.log(text)
-  console.log(foundLinks)
   return unique(foundLinks.filter(Boolean));
 }
 
@@ -82,14 +80,10 @@ async function processRecords(records) {
     let ghLinks = []
     let allLinks = []
     console.log("\tChecking", slackMessages.length, "messages")
-    slackMessages.forEach(msg => {
-      const txt = msg.text
+    slackMessages.forEach(txt => {
       if (!txt) return
       const ghMatches = findGhLinksInText(txt)
       const allMatches = findAllLinksInText(txt)
-      console.log(
-        "Running"
-      )
       if (ghMatches) {
         ghLinks = ghLinks.concat(ghMatches)
       }
@@ -111,14 +105,9 @@ async function processRecords(records) {
     console.log("\tFound", ghLinks.length, "gh links & ", allLinks.length, "all links for record", id)
   }
   console.log("Saving updates to current batch of records!")
-  try {
-    await base('Sessions').update(recordsToUpdate)
-    await sleep(1000)
-  } catch (e) {
-    if (e.error == 'ratelimited') {
-      sleep(30 * 1000)
-    }
-  }
+
+  await base('Sessions').update(recordsToUpdate)
+  await sleep(5000)
 }
 
 async function sleep(ms) {
