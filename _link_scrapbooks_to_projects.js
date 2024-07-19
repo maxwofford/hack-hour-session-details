@@ -20,12 +20,12 @@ function findReposInText(text) {
     "https://github.com(?:/[^/]+)*/commit/[0-9a-f]{40}",
     "g"
   );
-  const repoRegex = new RegExp("https://github.com/([^/]+)/([^/]+)", "g");
+  const repoRegex = /https:\/\/github\.com\/[\w\-\/]+/g
   const prRegex = new RegExp("https://github.com(?:/[^/]+)*/pull/[0-9]+", "g");
   const repoLinks = [
-    ...findUrlsInText(text, repoRegex),
-    ...findUrlsInText(text, prRegex),
-    ...findUrlsInText(text, commitRegex),
+      ...findUrlsInText(decodeURI(text), repoRegex),
+      ...findUrlsInText(decodeURI(text), prRegex),
+      ...findUrlsInText(decodeURI(text), commitRegex),
   ];
 
   return unique(repoLinks.map(parseGithubUrl).filter(Boolean));
@@ -113,9 +113,11 @@ function parseGithubUrl(url) {
 const scrapbookFilter = [
   "Approved = TRUE()",
   "{Linked Sessions Count} > 0",
-  "NOT({TEMP: Commits} = BLANK())",
+  "NOT({Session Commits} = BLANK())",
   "{Projects} = BLANK()",
+  "{Update type} = 'Ship'"
 ];
+
 let scrapbookRecords = await scrapbookBase
   .select({
     // maxRecords: 10,
@@ -125,9 +127,10 @@ let scrapbookRecords = await scrapbookBase
   .all();
 
 for (let i = 0; i < scrapbookRecords.length; i++) {
+  console.log(`${i + 1} / ${scrapbookRecords.length}`)
   const scrapbook = scrapbookRecords[i];
   // find all scrapbooks by this user
-  const repos = findReposInText(scrapbook.fields["TEMP: Commits"].join("\n"));
+  const repos = findReposInText(scrapbook.fields["Session Commits"].join("\n"));
   const repoRecords = await findOrCreateRepos(repos);
   if (repoRecords.length > 0) { // handling multiple repos is doable, just need to bind them together going forward
     // are there multiple projects in this 1 repo?

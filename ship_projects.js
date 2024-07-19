@@ -1,3 +1,5 @@
+import { sleep } from 'bun';
+
 const airtableBaseID = "app4kCWulfB02bV8Q"
 
 require('dotenv').config()
@@ -15,6 +17,7 @@ const usersBase = base('Users');
 const submissionsBase = base('Unified YSWS DB Submission')
 const ordersBase = base('Orders')
 const verificationsBase = base('YSWS Verification Users')
+const scrapbookBase = base('Scrapbook')
 
 const projectsToShip = await projectsBase.select({
   filterByFormula: `AND({Status} = 'Shipped', {Submission} = BLANK())`,
@@ -23,7 +26,6 @@ const projectsToShip = await projectsBase.select({
 console.log("Shipping", projectsToShip.length, "project(s)");
 
 for (let i = 0; i < projectsToShip.length; i++) {
-  if (i > 0) { continue }
   const project = projectsToShip[i];
   console.log(`${i + 1} / ${projectsToShip.length}`);
 
@@ -51,23 +53,36 @@ for (let i = 0; i < projectsToShip.length; i++) {
   fields['Description'] = project.get('Description')
   fields['Code URL'] = project.get('Github Link')[0]
   fields['Playable URL'] = project.get('Playable Link')
+  if (!fields['Playable URL'] && project.get('Scrapbooks').length > 0) {
+    let scrapbook = await scrapbookBase.find(project.get('Scrapbooks')[0])
+    fields['Playable URL'] = scrapbook.get('Scrapbook URL')
+  }
   fields['Override Hours Spent'] = project.get('Total Project Time') / 60 / 60
   fields['GitHub Username'] = project.get('Repo').split('/')[0]
   fields['Screenshot'] = project.get('Screenshot / Video').map(s => ({
     url: s.url,
     filename: s.filename
   }))
-  fields['Override Hours Spent Justification'] = `This is the number of hours tracked by Manitej's bot in #arcade on Slack. Numbers verified by the #arcade review team.`
+
+  fields['Override Hours Spent Justification'] = `This is the number of hours
+  tracked by Manitej's bot in #arcade on Slack.  It was built over
+  ${project.get('Scrapbook Links').length} scrapbook update(s).
+  ${project.get('Scrapbook Links').map(m => '-' + m).join('\n')}`
 
   const user = await getUser(project.get('User'))
   fields['Email'] = user.get('Email')
   if (!user.get('Orders') || user.get('Orders').length == 0) {
-    throw new Error("No orders on user!")
+    console.error("No orders on user!", user.id)
+    continue
   }
-  const order = await getOrder(user.get('Orders')[0])
+  const order = await getOrder(user.get('Name'))
+  if (!order) {
+    console.error("No order found!")
+    continue
+  }
 
-  fields['First Name'] = order.get('Shipping – First Name')
-  fields['Last Name'] = order.get('Shipping – Last Name')
+  fields['First Name'] = order.get('Shipping – First Name') || user.get('Name').split(' ')[0]
+  fields['Last Name'] = order.get('Shipping – Last Name') || user.get('Name').split(' ').slice(1).join(' ')
   fields['Address (Line 1)'] = order.get('Address: Line 1')
   fields['Address (Line 2)'] = order.get('Address: Line 2')
   fields['City'] = order.get('Address: City')
@@ -89,6 +104,7 @@ for (let i = 0; i < projectsToShip.length; i++) {
   } catch (e) {
     console.log(e)
   }
+  sleep(10 * 1000)
 }
 
 async function getUser(recordID) {
@@ -96,7 +112,15 @@ async function getUser(recordID) {
 }
 
 async function getOrder(recordID) {
-  return await ordersBase.find(recordID)
+  console.log("Getting order for", recordID)
+  const orders = await ordersBase.select({
+    filterByFormula: `AND(
+    {Status} = 'Fulfilled',
+    NOT(BLANK() = {Address: Line 1}),
+    {User} = '${recordID}'
+    )`
+  }).all()
+  return orders[0]
 }
 
 async function getVerification(recordID) {

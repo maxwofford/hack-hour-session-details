@@ -1,16 +1,39 @@
+import Bottleneck from "bottleneck";
+const airtableRatelimiter = require("./lib/airtable").default.ratelimiter;
+import { sleep } from "bun";
+
 require("dotenv").config();
 
 let githubHeaders = {};
-let ghTimeout = 5000;
 if (process.env.GITHUB_TOKEN) {
   // optionally set a github token to increase rate limit
   // I use a PAT with zero additional scopes (this only makes public API calls)
   githubHeaders = {
     Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
   };
-
-  ghTimeout = 1000;
 }
+
+let ghCache = new Map();
+
+// const airtableRatelimiter = new Bottleneck({
+//   // sane defaults
+//   maxConcurrent: 2,
+//   minTime: 100,
+//   // additional resevior logic based on airtables's docs
+//   reservoir: 10,
+//   reservoirRefreshAmount: 50,
+//   reservoirRefreshInterval: 60 * 1000,
+// })
+
+const githubRatelimiter = new Bottleneck({
+  // sane defaults
+  concurrent: 2,
+  minTime: 5 * 1000,
+  // additional resevior logic based on github's docs
+  reservoir: 10,
+  reservoirIncreaseAmount: 10,
+  reservoirIncreaseInterval: 60 * 1000,
+})
 
 const Airtable = require("airtable");
 Airtable.configure({
@@ -21,29 +44,21 @@ const base = Airtable.base("app4kCWulfB02bV8Q");
 
 const projectsBase = base("Projects");
 
-const projects = await projectsBase
+const projects = await airtableRatelimiter.schedule(() => projectsBase
   .select({
     filterByFormula: `{Action: Scrape for project details} = TRUE()`,
   })
-  .all();
+  .all())
 
 console.log("Finding more details for ", projects.length, "project(s)");
 for (let i = 0; i < projects.length; i++) {
   const project = projects[i];
   console.log(`${i + 1} / ${projects.length}`);
-  if (i > 0 && i % 10 === 0) {
-    console.log("Sleeping for 20 seconds to avoid rate limit");
-    await new Promise((r) => setTimeout(r, 20 * 1000));
-  }
-  if (i > 0 && i % 100 === 0) {
-    console.log("Sleeping for 5 min to avoid rate limit");
-    await new Promise((r) => setTimeout(r, 5 * 60 * 1000));
-  }
   await Promise.all([
     projectsBase.update(project.id, {
       "Action: Scrape for project details": false,
       Description:
-        project.get("Description") || (await getDescription(project.fields["Repo"])),
+        project.get("Description") || (await getDescriptionFromRepos(project.fields["Repo"].split('+'))),
       "Playable Link":
         project.get("Playable Link") ||
         (await getPlayableLink(project.fields["Repo"])),
@@ -52,6 +67,9 @@ for (let i = 0; i < projects.length; i++) {
     }),
     new Promise((r) => setTimeout(r, 200)),
   ]);
+}
+if (projects.length == 0) {
+  await sleep(5 * 1000)
 }
 
 async function getScreenshot(projectRecord) {
@@ -98,13 +116,36 @@ async function getScreenshot(projectRecord) {
   return [...thumbnails, ...scrapbookFiles];
 }
 
+async function getDescriptionFromRepos(repos) {
+  for (let i = 0; i < repos.length; i++) {
+    const repo = repos[i];
+    console.log(`Getting description for ${repo}`);
+    const description = await getDescription(repo.trim());
+    if (description) {
+      return description;
+    }
+  }
+}
+
+async function fetchGhRepo(repoName) {
+  return githubRatelimiter.schedule(() => fetch('https://api.github.com/repos/' + repoName, { headers: githubHeaders} ).then(r => r.json()))
+}
+async function getGhData(repoName) {
+  if (ghCache.has(repoName)) {
+    return await ghCache.get(repoName)
+  }
+  ghCache.set(repoName, fetchGhRepo(repoName))
+  return await ghCache.get(repoName)
+}
+
 async function getDescription(repoName) {
-  console.log({repoName})
-  const ghData = await fetch(
-    `https://api.github.com/repos/${repoName}`,
-    githubHeaders
-  ).then((r) => r.json());
-  console.log({ghData})
+  console.log("Getting description for", repoName)
+  const ghData = await getGhData(repoName);
+  if (ghData?.message?.includes('API rate limit exceeded')) {
+    console.log('Rate limit exceeded')
+    await sleep(10 * 1000)
+    process.exit(1)
+  }
   if (ghData.description) {
     return ghData.description;
   }
@@ -124,11 +165,7 @@ async function getPlayableLink(repoName) {
   } catch (e) {
     // Ignore this error– probably means that link doesn't end up going anywhere
   }
-  const ghData = await fetch(
-    `https://api.github.com/repos/${repoName}`,
-    githubHeaders
-  ).then((r) => r.json());
-  await new Promise((r) => setTimeout(r, ghTimeout)); // rate limit for gh api
+  const ghData = await getGhData(repoName)
   if (ghData.homepage && !playableLink) {
     console.log("Homepage found!", ghData.homepage);
     playableLink = ghData.homepage;
@@ -142,7 +179,7 @@ async function getPlayableLink(repoName) {
     console.log("GH Page found!", playableLink);
   }
   if (!playableLink) {
-    await getReleases(repoName).then((releases) => {
+    await githubRatelimiter.schedule(() => getReleases(repoName)).then((releases) => {
       if (releases.length > 0) {
         playableLink = releases[0].html_url;
         console.log("GH Release found!", playableLink);
@@ -150,7 +187,7 @@ async function getPlayableLink(repoName) {
     });
   }
   if (!playableLink) {
-    await getTags(repoName).then((tags) => {
+    await githubRatelimiter.schedule(() => getTags(repoName)).then((tags) => {
       if (tags.length > 0) {
         playableLink = `https://github.com/${repoName}/releases/tag/${tags[0].name}`;
         console.log("GH Tag found!", playableLink);
@@ -164,7 +201,7 @@ async function getPlayableLink(repoName) {
 async function getReleases(repoName) {
   const ghData = await fetch(
     `https://api.github.com/repos/${repoName}/releases`,
-    githubHeaders
+    { headers: githubHeaders} 
   ).then((r) => r.json());
   return ghData;
 }
@@ -172,7 +209,7 @@ async function getReleases(repoName) {
 async function getTags(repoName) {
   const ghData = await fetch(
     `https://api.github.com/repos/${repoName}/tags`,
-    githubHeaders
+    { headers: githubHeaders} 
   ).then((r) => r.json());
   return ghData;
 }
