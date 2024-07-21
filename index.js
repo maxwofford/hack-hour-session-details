@@ -127,7 +127,7 @@ function findGhLinksInText(text) {
     ...findUrlsInText(text, issueRegex),
   ];
 
-  return unique(releventLinks.filter(Boolean));
+  return uniq(releventLinks.filter(Boolean));
 }
 
 function findAllLinksInText(text) {
@@ -139,11 +139,7 @@ function findAllLinksInText(text) {
   const foundLinks = [
     ...findUrlsInText(text, linkRegex),
   ]
-  return unique(foundLinks.filter(Boolean));
-}
-
-function unique(arr) {
-  return [...new Set(arr)];
+  return uniq(foundLinks.filter(Boolean));
 }
 
 const processRecords = async (records) => {
