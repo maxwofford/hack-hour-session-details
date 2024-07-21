@@ -73,11 +73,11 @@ if (projects.length == 0) {
 }
 
 async function getScreenshot(projectRecord) {
-  const scrapbooks = await base("Scrapbook")
+  const scrapbooks = await ratelimiter.schedule(() => base("Scrapbook")
     .select({
       filterByFormula: `{Projects} = '${projectRecord.fields["Name"]}'`,
     })
-    .all();
+    .all())
 
   const scrapbookFiles = scrapbooks[0].fields["Attachments"].map((obj) => ({
     url: obj.url,
