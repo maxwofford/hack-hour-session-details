@@ -73,7 +73,7 @@ if (projects.length == 0) {
 }
 
 async function getScreenshot(projectRecord) {
-  const scrapbooks = await ratelimiter.schedule(() => base("Scrapbook")
+  const scrapbooks = await airtableRatelimiter.schedule(() => base("Scrapbook")
     .select({
       filterByFormula: `{Projects} = '${projectRecord.fields["Name"]}'`,
     })
