@@ -11,7 +11,7 @@ bun install
 To run:
 
 ```bash
-bun run index.js # this searches slack for each session and finds github repost related to projects
+bun run find_links_in_slack.js # this searches slack for each session and finds github repost related to projects
 bun run link_scrapbooks_to_projects.js # this finds or creates a project for each repo found & creates repos
 bun run update_project_details.js # this uses heuristics to guess details about the project
 bun run ship_projects.js # this send "shipped" projects to the YSWS database
