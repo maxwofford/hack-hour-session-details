@@ -1,39 +1,10 @@
-import Bottleneck from "bottleneck";
 const airtableRatelimiter = require("./lib/airtable").default.ratelimiter;
+const githubRatelimiter = require("./lib/github").default.ratelimiter
+const githubHeaders = require("./lib/github").default.headers
+const imgbbRatelimiter = require("./lib/imgbb").default.ratelimiter
 import { sleep } from "bun";
 
-require("dotenv").config();
-
-let githubHeaders = {};
-if (process.env.GH_TOKEN) {
-  // optionally set a github token to increase rate limit
-  // I use a PAT with zero additional scopes (this only makes public API calls)
-  githubHeaders = {
-    Authorization: `Bearer ${process.env.GH_TOKEN}`,
-  };
-}
-
 let ghCache = new Map();
-
-// const airtableRatelimiter = new Bottleneck({
-//   // sane defaults
-//   maxConcurrent: 2,
-//   minTime: 100,
-//   // additional resevior logic based on airtables's docs
-//   reservoir: 10,
-//   reservoirRefreshAmount: 50,
-//   reservoirRefreshInterval: 60 * 1000,
-// })
-
-const githubRatelimiter = new Bottleneck({
-  // sane defaults
-  concurrent: 2,
-  minTime: 5 * 1000,
-  // additional resevior logic based on github's docs
-  reservoir: 10,
-  reservoirIncreaseAmount: 10,
-  reservoirIncreaseInterval: 60 * 1000,
-})
 
 const Airtable = require("airtable");
 Airtable.configure({
@@ -90,28 +61,32 @@ async function getScreenshot(projectRecord) {
 
   let thumbnails = [];
   for (const file of videoFiles) {
-    const { getVideoDurationInSeconds } = require("get-video-duration");
-    const seekTime =
-      Math.min(await getVideoDurationInSeconds(file.url), 60) / 2;
+    try {
+      const { getVideoDurationInSeconds } = require("get-video-duration");
+      const seekTime =
+        Math.min(await getVideoDurationInSeconds(file.url), 60) / 2;
 
-    const genThumbnail = require("simple-thumbnail");
+      const genThumbnail = require("simple-thumbnail");
 
-    const thumbnail = await genThumbnail(file.url, "./tmp/thumb.png", "500x?", {
-      seek: `00:00:${seekTime.toString().padStart(2, "0")}`,
-    });
+      const _thumbnail = await genThumbnail(file.url, "./tmp/thumb.png", "500x?", {
+        seek: `00:00:${seekTime.toString().padStart(2, "0")}`,
+      });
 
-    const imgbbUploader = require("imgbb-uploader");
-    const thumbUrl = await imgbbUploader(
-      process.env.IMGBB_API_KEY,
-      "./tmp/thumb.png"
-    )
-      .then((response) => response.url)
-      .catch((error) => console.error(error));
+      const imgbbUploader = require("imgbb-uploader");
+      const thumbUrl = await imgbbRatelimiter.schedule(() => imgbbUploader(
+        process.env.IMGBB_API_KEY,
+        "./tmp/thumb.png"
+      )
+        .then((response) => response.url)
+        .catch((error) => console.error(error)))
 
-    thumbnails.push({
-      filename: file.filename + ".png",
-      url: thumbUrl,
-    });
+      thumbnails.push({
+        filename: file.filename + ".png",
+        url: thumbUrl,
+      });
+    } catch(e) {
+      console.error(e)
+    }
   }
   return [...thumbnails, ...scrapbookFiles];
 }
