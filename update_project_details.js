@@ -5,11 +5,11 @@ import { sleep } from "bun";
 require("dotenv").config();
 
 let githubHeaders = {};
-if (process.env.GITHUB_TOKEN) {
+if (process.env.GH_TOKEN) {
   // optionally set a github token to increase rate limit
   // I use a PAT with zero additional scopes (this only makes public API calls)
   githubHeaders = {
-    Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+    Authorization: `Bearer ${process.env.GH_TOKEN}`,
   };
 }
 
