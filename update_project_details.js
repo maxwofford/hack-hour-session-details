@@ -92,7 +92,7 @@ async function getScreenshot(projectRecord) {
   for (const file of videoFiles) {
     const { getVideoDurationInSeconds } = require("get-video-duration");
     const seekTime =
-      Math.min(await getVideoDurationInSeconds(file.url), 60) / 2;
+      Math.min(await getVideoDurationInSeconds(file.url, process.env.FFMPEG_PATH), 60) / 2;
 
     const genThumbnail = require("simple-thumbnail");
 
