@@ -53,15 +53,38 @@ async function updateFromBatch(record = null, force = false) {
 async function processScrapbook(scrapbookRecord) {
   if (scrapbookRecord.get("Approved")) {
     console.log("Scrapbook is already approved", scrapbookRecord.id);
-    prompt(['Press any key to continue'])
+    // prompt(['Press any key to continue'])
     return;
   }
 
   if (scrapbookRecord.get('Count Unreviewed Sessions') > 0) {
-    console.log("Scrapbook has unreviewed sessions", scrapbookRecord.id);
-    console.log(`https://airtable.com/app4kCWulfB02bV8Q/pagnimexLMWHJcyc4?eonOF=${scrapbookRecord.id}`)
-    prompt(['Press any key to continue'])
-    return;
+    console.log("Checking sessions for ", scrapbookRecord.id);
+    await Promise.all(scrapbookRecord.get('Sessions').map(async session => {
+      let sessionRecord = await ratelimiter.schedule(() => sessionsBase.find(session))
+      if (sessionRecord.get('Status') == 'Unreviewed') {
+        let sessionFields = {}
+        if (sessionRecord.get('Git Commits')) {
+          sessionFields['Status'] = 'Approved'
+          console.log("Marking approve session", sessionRecord.id);
+        } else {
+          if (sessionRecord.get('TEMP - Bulk reviewed?')) {
+            return
+          }
+          sessionFields['TEMP - Bulk reviewed?'] = true
+          console.log("Marking bulk session", sessionRecord.id);
+        }
+        await ratelimiter.schedule(() => sessionsBase.update(sessionRecord.id, sessionFields))
+      }
+    }))
+    scrapbookRecord = await ratelimiter.schedule(() => scrapbookBase.find(scrapbookRecord.id))
+    if (scrapbookRecord.get('Count Unreviewed Sessions') == 0) {
+      console.log("Fixed unreviewed sessions", scrapbookRecord.id);
+    } else {
+      console.log("Scrapbook has unreviewed sessions", scrapbookRecord.id);
+      console.log(`https://airtable.com/app4kCWulfB02bV8Q/pagnimexLMWHJcyc4?eonOF=${scrapbookRecord.id}`)
+      // prompt(['Press any key to continue'])
+      return;
+    }
   }
 
   if (scrapbookRecord.get('Review Start Time') || scrapbookRecord.get('Review End Time')) {
