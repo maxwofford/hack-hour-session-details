@@ -1,6 +1,6 @@
 import { sleep } from "bun";
 
-const { scrapbookBase, usersBase, reposBase, projectBase } =
+const { scrapbookBase, usersBase, reposBase, projectBase, ratelimiter } =
   require("./lib/airtable").default;
 const uniq = require("./lib/uniq").default;
 
@@ -61,14 +61,12 @@ for (let i = 0; i < scrapbooks.length; i++) {
   );
 
   // find or create the github repo for each scrapbook
-  let projectsToCreate = []
-  let hasIssues = false
+  let projectsToCreate = [];
+  let hasIssues = false;
   for (const scrapbook of scrapbooksBeforeShip) {
-    const sessionText = scrapbook.fields["Session Commits"] || []
-    const scrapbookText = scrapbook.fields["Text"]
-    const repos = findReposInText(
-      ([...sessionText, scrapbookText]).join("\n")
-    );
+    const sessionText = scrapbook.fields["Session Commits"] || [];
+    const scrapbookText = scrapbook.fields["Text"];
+    const repos = findReposInText([...sessionText, scrapbookText].join("\n"));
     const repoRecords = await findOrCreateRepos(repos);
     if (repoRecords.length > 0) {
       // handling multiple repos is doable, just need to bind them together going forward
@@ -87,21 +85,26 @@ for (let i = 0; i < scrapbooks.length; i++) {
           repos: repoRecords.map((id) => id.get("Name")).join(" + "),
           scrapbooks: scrapbook.id,
           users: scrapbook.get("User")[0],
-          repoRecords: repoRecords
-        })
+          repoRecords: repoRecords,
+        });
       }
     } else {
       console.log("I need help with this one", scrapbook.id);
-      hasIssues = true
+      hasIssues = true;
     }
   }
   if (hasIssues) {
-    console.log('Some projects have issues, skipping this user')
+    console.log("Some projects have issues, skipping this user");
   } else {
     for (const project of projectsToCreate) {
-      await findOrCreateProject(project.repos, project.scrapbooks, project.users, project.repoRecords)
+      await findOrCreateProject(
+        project.repos,
+        project.scrapbooks,
+        project.users,
+        project.repoRecords
+      );
     }
-    await sleep(5 * 1000)
+    await sleep(5 * 1000);
     if (scrapbooksBeforeShip.length > 0) {
       // prompt('[Press any key to continue]')
     }
@@ -114,24 +117,28 @@ async function findOrCreateRepos(arr) {
   const nameFilter = arr.map((name) => `{Name} = '${name}'`).join(", ");
   const formula = arr.length == 1 ? nameFilter : `OR(${nameFilter})`;
   let newRepoRecords = [];
-  let repoRecords = await reposBase
+  let repoRecords = await ratelimiter.schedule(() => reposBase
     .select({
       filterByFormula: formula,
     })
-    .all();
+    .all())
   const missingRepos = arr.filter(
     (name) => !repoRecords.some((r) => r.get("Name") === name)
   );
   if (missingRepos.length > 0) {
     console.log("Creating missing repos", missingRepos);
-    const newRecordFields = missingRepos.map((name) => ({
+  }
+  for (let i = 0; i < missingRepos.length; i += 10) {
+    const repoChunk = missingRepos.slice(i, i + 10).filter(Boolean);
+    console.log("Batching", repoChunk)
+    const newRecordFields = repoChunk.map((name) => ({
       fields: {
         Org: name.split("/")[0],
         "Repo Name": name.split("/")[1],
         "Repo Link": `https://github.com/${name}`,
       },
     }));
-    newRepoRecords = await reposBase.create(newRecordFields);
+    newRepoRecords.concat(await ratelimiter.schedule(() => reposBase.create(newRecordFields)))
   }
   return [...repoRecords, ...newRepoRecords];
 }
@@ -149,12 +156,12 @@ async function findOrCreateProject(name, scrapbookID, userID, repos) {
     );
     projectFilter = `RECORD_ID() = '${existingProjectForRepo[0]}'`;
   }
-  const projectRecords = await projectBase
+  const projectRecords = await ratelimiter.schedule(() => projectBase
     .select({
       filterByFormula: projectFilter,
       maxRecords: 1,
     })
-    .all();
+    .all())
   let projectRecord = projectRecords[0];
   if (projectRecord) {
     console.log("Updating project", name);
@@ -167,14 +174,14 @@ async function findOrCreateProject(name, scrapbookID, userID, repos) {
     });
   } else {
     console.log("Creating project", name);
-    projectRecord = await projectBase.create({
+    projectRecord = await ratelimiter.schedule(() => projectBase.create({
       "Action: Scrape for project details": true,
       Name: name,
       Repo: name,
       User: [userID],
       Scrapbooks: [scrapbookID],
       Repos: repos.map((r) => r.id),
-    });
+    }))
   }
   return projectRecord;
 }
@@ -189,7 +196,7 @@ function findReposInText(text) {
     "https://github.com(?:/[^/]+)*/commit/[0-9a-f]{40}",
     "g"
   );
-  const repoRegex = /https:\/\/github\.com\/[\w\-\/]+/g
+  const repoRegex = /https:\/\/github\.com\/[\w\-\/]+/g;
   const prRegex = new RegExp("https://github.com(?:/[^/]+)*/pull/[0-9]+", "g");
   try {
     const repoLinks = [
@@ -200,8 +207,8 @@ function findReposInText(text) {
 
     return uniq(repoLinks.map(parseGithubUrl).filter(Boolean));
   } catch (e) {
-    console.log(e)
-    return []
+    console.log(e);
+    return [];
   }
 }
 
