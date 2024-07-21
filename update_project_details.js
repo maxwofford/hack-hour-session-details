@@ -141,7 +141,7 @@ async function getPlayableLink(repoName) {
     // Ignore this error– probably means that link doesn't end up going anywhere
   }
   const ghData = await getGhData(repoName)
-  if (ghData.homepage && !playableLink) {
+  if (ghData.homepage  && !ghData.homepage.includes('replit') && !playableLink) {
     console.log("Homepage found!", ghData.homepage);
     playableLink = ghData.homepage;
   }
