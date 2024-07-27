@@ -184,7 +184,7 @@ async function getPlayableLinkFromScrapbook(scrapbooks = []) {
     search = () => base("Scrapbook").find(scrapbooks[0]).then(r => [r])
   } else {
     search = () => base("Scrapbook").select({
-      filterByFormula: `OR(${scrapbooks.map(m => `{ID} = '${m}'`).join(", ")})`
+      filterByFormula: `OR(${scrapbooks.map(m => `{Scrapbook TS} = '${m}'`).join(", ")})`
     }).all()
   }
 
