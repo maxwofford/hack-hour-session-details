@@ -32,7 +32,8 @@ for (let i = 0; i < projects.length; i++) {
         project.get("Description") || (await getDescriptionFromRepos(project.fields["Repo"].split('+'))),
       "Playable Link":
         project.get("Playable Link") ||
-        (await getPlayableLink(project.fields["Repo"])),
+        (await getPlayableLinkFromGH(project.fields["Repo"])) ||
+        (await getPlayableLinkFromScrapbook(project.fields["Scrapbooks"])),
       "Screenshot / Video":
         project.get("Screenshot / Video") || (await getScreenshot(project)),
     }),
@@ -126,7 +127,7 @@ async function getDescription(repoName) {
   }
 }
 
-async function getPlayableLink(repoName) {
+async function getPlayableLinkFromGH(repoName) {
   let playableLink = "";
   try {
     const [org, repo] = repoName.split("/");
@@ -169,8 +170,36 @@ async function getPlayableLink(repoName) {
       }
     });
   }
+  if (!playableLink) {
+    console.log("No playable link found in github")
+  }
 
   return playableLink;
+}
+
+async function getPlayableLinkFromScrapbook(scrapbooks = []) {
+  if (scrapbooks.length == 0) { return }
+  let search
+  if (scrapbooks.length == 1) {
+    search = () => base("Scrapbook").find(scrapbooks[0]).then(r => [r])
+  } else {
+    search = () => base("Scrapbook").select({
+      filterByFormula: `OR(${scrapbooks.map(m => `{ID} = '${m}'`).join(", ")})`
+    }).all()
+  }
+
+  const scrapbookRecords = await airtableRatelimiter.schedule(search);
+
+  const allLinks = scrapbookRecords.map((record) => record.fields["Session Links"]).flat().filter(Boolean);
+
+  const shippingWebsites = ['itch.io', 'printables.com', 'glitch.me', 'vercel.app']
+
+  for (const link of allLinks) {
+    if (shippingWebsites.some((site) => link.includes(site))) {
+      return link;
+    }
+  }
+  console.log("No playable link found in scrapbook");
 }
 
 async function getReleases(repoName) {
