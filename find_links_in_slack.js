@@ -133,7 +133,7 @@ function findGhLinksInText(text) {
 function findAllLinksInText(text) {
   // handling slack links means finding links inside of slack formatting, like <https://google.com|google> or <https://google.com>
   const linkRegex = new RegExp(
-    "https?://[^\\s|<>]+",
+    "https?://[^\\s|<\>]+",
     "g"
   );
   const foundLinks = [
