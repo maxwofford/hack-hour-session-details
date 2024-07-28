@@ -45,51 +45,56 @@ if (projects.length == 0) {
 }
 
 async function getScreenshot(projectRecord) {
-  const scrapbooks = await airtableRatelimiter.schedule(() => base("Scrapbook")
-    .select({
-      filterByFormula: `{Projects} = '${projectRecord.fields["Name"]}'`,
-    })
-    .all())
+  try {
 
-  const scrapbookFiles = scrapbooks[0].fields["Attachments"].map((obj) => ({
-    url: obj.url,
-    filename: obj.filename,
-  }));
+    const scrapbooks = await airtableRatelimiter.schedule(() => base("Scrapbook")
+      .select({
+        filterByFormula: `{Projects} = '${projectRecord.fields["Name"]}'`,
+      })
+      .all())
 
-  const videoFiles = scrapbookFiles.filter((file) =>
-    file.filename.includes(".mp4")
-  );
+    const scrapbookFiles = scrapbooks[0].fields["Attachments"].map((obj) => ({
+      url: obj.url,
+      filename: obj.filename,
+    }));
 
-  let thumbnails = [];
-  for (const file of videoFiles) {
-    try {
-      const { getVideoDurationInSeconds } = require("get-video-duration");
-      const seekTime =
-        Math.min(await getVideoDurationInSeconds(file.url), 60) / 2;
+    const videoFiles = scrapbookFiles.filter((file) =>
+      file.filename.includes(".mp4")
+    );
 
-      const genThumbnail = require("simple-thumbnail");
+    let thumbnails = [];
+    for (const file of videoFiles) {
+      try {
+        const { getVideoDurationInSeconds } = require("get-video-duration");
+        const seekTime =
+          Math.min(await getVideoDurationInSeconds(file.url), 60) / 2;
 
-      const _thumbnail = await genThumbnail(file.url, "./tmp/thumb.png", "500x?", {
-        seek: `00:00:${seekTime.toString().padStart(2, "0")}`,
-      });
+        const genThumbnail = require("simple-thumbnail");
 
-      const imgbbUploader = require("imgbb-uploader");
-      const thumbUrl = await imgbbRatelimiter.schedule(() => imgbbUploader(
-        process.env.IMGBB_API_KEY,
-        "./tmp/thumb.png"
-      )
-        .then((response) => response.url)
-        .catch((error) => console.error(error)))
+        const _thumbnail = await genThumbnail(file.url, "./tmp/thumb.png", "500x?", {
+          seek: `00:00:${seekTime.toString().padStart(2, "0")}`,
+        });
 
-      thumbnails.push({
-        filename: file.filename + ".png",
-        url: thumbUrl,
-      });
-    } catch(e) {
-      console.error(e)
+        const imgbbUploader = require("imgbb-uploader");
+        const thumbUrl = await imgbbRatelimiter.schedule(() => imgbbUploader(
+          process.env.IMGBB_API_KEY,
+          "./tmp/thumb.png"
+        )
+          .then((response) => response.url)
+          .catch((error) => console.error(error)))
+
+        thumbnails.push({
+          filename: file.filename + ".png",
+          url: thumbUrl,
+        });
+      } catch(e) {
+        console.error(e)
+      }
     }
+    return [...thumbnails, ...scrapbookFiles];
+  } catch(e) {
+    console.error(e)
   }
-  return [...thumbnails, ...scrapbookFiles];
 }
 
 async function getDescriptionFromRepos(repos) {
