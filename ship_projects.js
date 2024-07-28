@@ -71,6 +71,16 @@ for (let i = 0; i < projectsToShip.length; i++) {
 
   const user = await getUser(project.get('User'))
   fields['Email'] = user.get('Email')
+
+  if (!user.get('YSWS Verification User')) {
+    console.error("No verification on user!", user.id)
+    continue
+  }
+  const verification = await getVerification(user.get('YSWS Verification User'))
+  fields['Birthday'] = verification.get('Birthday')
+  fields['First Name'] = verification.get('Name').split(' ')[0]
+  fields['Last Name'] = verification.get('Name').split(' ').slice(1).join(' ')
+
   if (!user.get('Orders') || user.get('Orders').length == 0) {
     console.error("No orders on user!", user.id)
     continue
@@ -81,20 +91,14 @@ for (let i = 0; i < projectsToShip.length; i++) {
     continue
   }
 
-  fields['First Name'] = order.get('Shipping – First Name') || user.get('Name').split(' ')[0]
-  fields['Last Name'] = order.get('Shipping – Last Name') || user.get('Name').split(' ').slice(1).join(' ')
+  fields['First Name'] ||= order.get('Shipping – First Name') || user.get('Name').split(' ')[0]
+  fields['Last Name'] ||= order.get('Shipping – Last Name') || user.get('Name').split(' ').slice(1).join(' ')
   fields['Address (Line 1)'] = order.get('Address: Line 1')
   fields['Address (Line 2)'] = order.get('Address: Line 2')
   fields['City'] = order.get('Address: City')
   fields['ZIP / Postal Code'] = order.get('Address: Postal Code')
   fields['State / Province'] = order.get('Address: State/Province')
   fields['Country'] = order.get('Address: Country')
-
-  if (!user.get('YSWS Verification User')) {
-    throw new Error("No verification on user")
-  }
-  const verification = await getVerification(user.get('YSWS Verification User'))
-  fields['Birthday'] = verification.get('Birthday')
 
   console.log(fields)
   console.log('creating submission')
