@@ -30,6 +30,8 @@ const scrapbooks = await scrapbookBase
     order: [{ field: "Scrapbook TS", direction: "asc" }],
   })
   .all();
+
+console.log("Found", scrapbooks.length, "scrapbooks to process");
 for (let i = 0; i < scrapbooks.length; i++) {
   const ship = scrapbooks[i];
 
@@ -64,6 +66,7 @@ for (let i = 0; i < scrapbooks.length; i++) {
   let projectsToCreate = [];
   let hasIssues = false;
   for (const scrapbook of scrapbooksBeforeShip) {
+    console.log("Processing scrapbook", scrapbook.id);
     const sessionText = scrapbook.fields["Session Commits"] || [];
     const scrapbookText = scrapbook.fields["Text"];
     const repos = findReposInText([...sessionText, scrapbookText].join("\n"));
@@ -89,7 +92,7 @@ for (let i = 0; i < scrapbooks.length; i++) {
         });
       }
     } else {
-      console.log("I need help with this one", scrapbook.id);
+      console.log("No repo found for", scrapbook.id)
       hasIssues = true;
     }
   }
