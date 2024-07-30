@@ -59,7 +59,7 @@ for (let i = 0; i < projectsToShip.length; i++) {
   }
   fields['Override Hours Spent'] = project.get('Total Project Time') / 60 / 60
   fields['GitHub Username'] = project.get('Repo').split('/')[0]
-  fields['Screenshot'] = project.get('Screenshot / Video').map(s => ({
+  fields['Screenshot'] = (project.get('Screenshot / Video') || []).map(s => ({
     url: s.url,
     filename: s.filename
   }))
