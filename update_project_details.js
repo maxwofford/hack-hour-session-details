@@ -130,7 +130,8 @@ async function getDescriptionFromRepos(repos) {
       messages: [{ role: 'user', content: prompt }],
       model: 'gpt-3.5-turbo',
     })
-    return chatCompletion.choices[0].message.content
+    return `${chatCompletion.choices[0].message.content}
+    - description by gpt using max's script`
   }
 }
 
