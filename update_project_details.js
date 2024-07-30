@@ -106,6 +106,32 @@ async function getDescriptionFromRepos(repos) {
       return description;
     }
   }
+  console.log("No description found in repos")
+  if (!process.env.OPENAI_API_KEY) {return}
+  console.log("Attempting to download READMEs and generate descriptions")
+  for (let i = 0; i < repos.length; i++) {
+    // get README from description
+    const repo = repos[i];
+    const readme = await fetch(`https://api.github.com/repos/${repo}/readme`, { headers: githubHeaders }).then(r => r.json())
+    const readmeURL = readme?.download_url
+    if (!readmeURL) { continue }
+    const readmeContent = await fetch(readmeURL).then(r => r.text())
+    if (readmeContent.length < 180) {
+      console.log("Readme is short!")
+      return readmeContent
+    }
+    if (!readmeContent) { continue }
+    const OpenAI = require('openai');
+    const client = new OpenAI()
+    const prompt = `You are helping me analyze GitHub repos made by high schoolers working on a summer program. Please respond in a short, concise manner.
+    If you can't find a description, or the description is too generic to assume what the code does, please respond with "NO DESCRIPTION FOUND" or "DESCRIPTION IS TOO GENERIC".
+    Generate a description for the GitHub repo '${repo}' based on the following README file content: \n\n${readmeContent}`
+    const chatCompletion = await client.chat.completions.create({
+      messages: [{ role: 'user', content: prompt }],
+      model: 'gpt-3.5-turbo',
+    })
+    return chatCompletion.choices[0].message.content
+  }
 }
 
 async function fetchGhRepo(repoName) {
