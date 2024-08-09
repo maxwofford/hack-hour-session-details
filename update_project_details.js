@@ -125,7 +125,7 @@ async function getDescriptionFromRepos(repos) {
     const client = new OpenAI()
     const prompt = `You are helping me analyze GitHub repos made by high schoolers working on a summer program. Please respond in a short, concise manner.
     If you can't find a description, or the description is too generic to assume what the code does, please respond with "NO DESCRIPTION FOUND" or "DESCRIPTION IS TOO GENERIC".
-    Generate a description for the GitHub repo '${repo}' based on the following README file content: \n\n${readmeContent}`
+    Generate a description for the GitHub repo '${repo}' based on the following README file content: \n\n${readmeContent.slice(0, 10 * 1000)}`
     const chatCompletion = await client.chat.completions.create({
       messages: [{ role: 'user', content: prompt }],
       model: 'gpt-3.5-turbo',
