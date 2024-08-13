@@ -29,7 +29,7 @@ for (let i = 0; i < projects.length; i++) {
     projectsBase.update(project.id, {
       "Action: Scrape for project details": false,
       Description:
-        project.get("Description") || (await getDescriptionFromRepos(project.fields["Repo"].split('+'))),
+        project.get("Description") || (await getDescriptionFromRepos(project.fields["Repo"]?.split('+') || [])),
       "Playable Link":
         project.get("Playable Link") ||
         (await getPlayableLinkFromGH(project.fields["Repo"])) ||
@@ -98,6 +98,10 @@ async function getScreenshot(projectRecord) {
 }
 
 async function getDescriptionFromRepos(repos) {
+  if (!repos || repos.length == 0) {
+    console.log("No repos found")
+    return;
+  }
   for (let i = 0; i < repos.length; i++) {
     const repo = repos[i];
     console.log(`Getting description for ${repo}`);
