@@ -121,7 +121,7 @@ async function getOrder(recordID) {
     filterByFormula: `AND(
     {Status} = 'Fulfilled',
     NOT(BLANK() = {Address: Line 1}),
-    {User} = '${recordID}'
+    {User} = "${recordID}"
     )`
   }).all()
   return orders[0]
